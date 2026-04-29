@@ -36,6 +36,19 @@ def crear_bd_desde_sql() -> sqlite3.Connection:
     # 5. Haz commit de los cambios
     # 6. Devuelve la conexión
     pass
+    if os.path.exists(DB_PATH):
+        os.remove(DB_PATH)
+
+    conexion = sqlite3.connect(DB_PATH)
+
+    with open(SQL_FILE_PATH, 'r') as sql_file:
+        sql_script = sql_file.read()
+
+    conexion.executescript(sql_script)
+
+    conexion.commit()
+
+    return conexion
 
 def obtener_libros(conexion: sqlite3.Connection) -> List[Tuple]:
     """
@@ -52,6 +65,16 @@ def obtener_libros(conexion: sqlite3.Connection) -> List[Tuple]:
     # 2. Ejecuta una consulta JOIN para obtener los libros con sus autores
     # 3. Retorna los resultados como una lista de tuplas
     pass
+    cursor = conexion.cursor()
+
+    cursor.execute('''
+        SELECT l.id, l.titulo, l.anio, a.nombre
+        FROM libros l
+        JOIN autores a ON l.autor_id = a.id
+        ORDER BY l.id
+    ''')
+
+    return cursor.fetchall()
 
 def agregar_libro(conexion: sqlite3.Connection, titulo: str, anio: int, autor_id: int) -> int:
     """
@@ -72,6 +95,16 @@ def agregar_libro(conexion: sqlite3.Connection, titulo: str, anio: int, autor_id
     # 3. Haz commit de los cambios
     # 4. Retorna el ID del nuevo libro (usar cursor.lastrowid)
     pass
+    cursor = conexion.cursor()
+
+    cursor.execute("""
+            INSERT INTO libros (titulo, anio, autor_id)
+             VALUES (?, ?, ?)
+            """, (titulo, anio, autor_id))
+    
+    conexion.commit()
+
+    return cursor.lastrowid
 
 def actualizar_libro(conexion: sqlite3.Connection, libro_id: int, nuevo_titulo: Optional[str] = None,
                     nuevo_anio: Optional[int] = None, nuevo_autor_id: Optional[int] = None) -> bool:
@@ -95,6 +128,34 @@ def actualizar_libro(conexion: sqlite3.Connection, libro_id: int, nuevo_titulo: 
     # 4. Ejecuta la consulta y haz commit de los cambios
     # 5. Retorna True si se modificó alguna fila, False en caso contrario
     pass
+    cursor = conexion.cursor()
+
+    cursor.execute("SELECT id FROM libros WHERE id = ?", (libro_id,))
+    if not cursor.fetchone():
+        return False
+    
+    updates = []
+    values = []
+
+    if nuevo_titulo is not None:
+        updates.append("titulo = ?")
+        values.append(nuevo_titulo)
+    if nuevo_anio is not None:
+        updates.append("anio = ?")
+        values.append(nuevo_anio)
+    if nuevo_autor_id is not None:
+        updates.append("autor_id = ?")
+        values.append(nuevo_autor_id)
+
+    if not updates:
+        return True  # No hay cambios, pero el libro existe
+    
+    values.append(libro_id)
+    query = f"UPDATE libros SET {', '.join(updates)} WHERE id = ?"
+    cursor.execute(query, values)
+    conexion.commit()
+
+    return cursor.rowcount > 0
 
 def obtener_autores(conexion: sqlite3.Connection) -> List[Tuple]:
     """
@@ -111,6 +172,11 @@ def obtener_autores(conexion: sqlite3.Connection) -> List[Tuple]:
     # 2. Ejecuta una consulta SELECT para obtener los autores
     # 3. Retorna los resultados como una lista de tuplas
     pass
+    cursor = conexion.cursor()
+
+    cursor.execute("SELECT id, nombre FROM autores ORDER BY id")
+
+    return cursor.fetchall()
 
 if __name__ == "__main__":
     try:

@@ -26,6 +26,7 @@ def crear_conexion():
     """
     # Implementa la creación de la conexión y retorna el objeto conexión
     pass
+    return sqlite3.connect(DB_PATH)
 
 def crear_tablas(conexion):
     """
@@ -37,6 +38,26 @@ def crear_tablas(conexion):
     # Implementa la creación de tablas usando SQL
     # Usa conexion.cursor() para crear un cursor y ejecutar comandos SQL
     pass
+    cursor = conexion.cursor()
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS autores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL
+        )
+    ''')
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS libros (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titulo TEXT NOT NULL,
+            anio INTEGER,
+            autor_id INTEGER,
+            FOREIGN KEY (autor_id) REFERENCES autores(id)
+        )
+    ''')
+    conexion.commit()    
+
 
 def insertar_autores(conexion, autores):
     """
@@ -46,6 +67,10 @@ def insertar_autores(conexion, autores):
     # Implementa la inserción de autores usando SQL INSERT
     # Usa consultas parametrizadas para mayor seguridad
     pass
+    cursor = conexion.cursor()
+    cursor.executemany('INSERT INTO autores (nombre) VALUES (?)', autores)
+    conexion.commit()
+    
 
 def insertar_libros(conexion, libros):
     """
@@ -55,6 +80,9 @@ def insertar_libros(conexion, libros):
     # Implementa la inserción de libros usando SQL INSERT
     # Usa consultas parametrizadas para mayor seguridad
     pass
+    cursor = conexion.cursor()
+    cursor.executemany('INSERT INTO libros (titulo, anio, autor_id) VALUES (?, ?, ?)', libros)
+    conexion.commit()
 
 def consultar_libros(conexion):
     """
@@ -63,6 +91,16 @@ def consultar_libros(conexion):
     # Implementa una consulta SQL JOIN para obtener libros con sus autores
     # Imprime los resultados formateados
     pass
+    cursor = conexion.cursor()
+    cursor.execute('''
+                      SELECT l.titulo, l.anio, a.nombre
+                      FROM libros l
+                      JOIN autores a ON l.autor_id = a.id
+                      ORDER BY a.nombre, l.titulo
+                   ''')
+    
+    for titulo, anio, autor in cursor.fetchall():
+                      print(f"{titulo} ({anio}) - {autor}")
 
 def buscar_libros_por_autor(conexion, nombre_autor):
     """
@@ -71,6 +109,16 @@ def buscar_libros_por_autor(conexion, nombre_autor):
     # Implementa una consulta SQL con WHERE para filtrar por autor
     # Retorna una lista de tuplas (titulo, anio)
     pass
+    cursor = conexion.cursor()
+    cursor.execute('''
+                        SELECT l.titulo, l.anio
+                        FROM libros l
+                        JOIN autores a ON l.autor_id = a.id
+                        WHERE a.nombre = ?
+                        ORDER BY l.anio
+                     ''', (nombre_autor,))
+    
+    return cursor.fetchall()
 
 def actualizar_libro(conexion, id_libro, nuevo_titulo=None, nuevo_anio=None):
     """
@@ -79,6 +127,25 @@ def actualizar_libro(conexion, id_libro, nuevo_titulo=None, nuevo_anio=None):
     # Implementa la actualización usando SQL UPDATE
     # Solo actualiza los campos que no son None
     pass
+    if nuevo_titulo is None and nuevo_anio is None:
+        return  # No hay cambios que hacer
+    
+    cursor = conexion.cursor()
+    updates = []
+    values = []
+
+    if nuevo_titulo is not None:
+        updates.append("titulo = ?")
+        values.append(nuevo_titulo)
+    if nuevo_anio is not None:
+        updates.append("anio = ?")
+        values.append(nuevo_anio)
+
+    values.append(id_libro)
+
+    query = f"UPDATE libros SET {', '.join(updates)} WHERE id = ?"
+    cursor.execute(query, values)
+    conexion.commit()
 
 def eliminar_libro(conexion, id_libro):
     """
@@ -86,6 +153,10 @@ def eliminar_libro(conexion, id_libro):
     """
     # Implementa la eliminación usando SQL DELETE
     pass
+    cursor = conexion.cursor()
+    cursor.execute('DELETE FROM libros WHERE id = ?', (id_libro,))
+    conexion.commit()
+
 
 def ejemplo_transaccion(conexion):
     """
@@ -97,6 +168,28 @@ def ejemplo_transaccion(conexion):
     # 3. Si todo está bien, confirma con conexion.commit()
     # 4. En caso de error, revierte con conexion.rollback()
     pass
+    cursor = conexion.cursor()
+    try:
+        cursor.execute("BEGIN TRANSACTION")
+
+        # Ejemplo de operaciones dentro de la transacción
+        cursor.execute('INSERT INTO autores (nombre) VALUES (?)', ("Miguel de Cervantes",))
+
+        autor_id = cursor.lastrowid
+
+        libros_cervantes = [
+            ("Don Quijote de la Mancha", 1605, autor_id),
+            ("Novelas ejemplares", 1613, autor_id)
+        ]
+        cursor.executemany('INSERT INTO libros (titulo, anio, autor_id) VALUES (?, ?, ?)', libros_cervantes)
+
+        conexion.commit()
+
+    except sqlite3.Error:
+        conexion.rollback()
+        raise
+         
+
 
 if __name__ == "__main__":
     try:

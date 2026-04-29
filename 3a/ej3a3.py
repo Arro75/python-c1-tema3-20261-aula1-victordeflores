@@ -33,6 +33,15 @@ def conectar_bd() -> sqlite3.Connection:
     # 3. Configura la conexión para que devuelva las filas como diccionarios (opcional)
     # 4. Retorna la conexión
     pass
+    if not os.path.exists(DB_PATH):
+        raise FileNotFoundError(f"La base de datos no existe en {DB_PATH}")
+    
+    conexion = sqlite3.connect(DB_PATH)
+
+    # Configurar para que las filas se devuelvan como diccionarios
+    conexion.row_factory = sqlite3.Row
+
+    return conexion
 
 def convertir_a_json(conexion: sqlite3.Connection) -> Dict[str, List[Dict[str, Any]]]:
     """
@@ -55,6 +64,29 @@ def convertir_a_json(conexion: sqlite3.Connection) -> Dict[str, List[Dict[str, A
     #    d. Añade el diccionario a una lista para esa tabla
     # 4. Retorna el diccionario completo con todas las tablas
     pass
+    resultado = {}
+
+    cursor = conexion.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tablas = cursor.fetchall()
+
+    for tabla in tablas:
+        nombre_tabla = tabla[0]
+
+        cursor.execute(f"SELECT * FROM {nombre_tabla};")
+
+        columnas = [descripcion[0] for descripcion in cursor.description]
+
+        resultado[nombre_tabla] = []
+        for fila in cursor.fetchall():
+
+            resultado[nombre_tabla].append({
+                columnas[i]: valor
+                for i, valor in enumerate(fila)
+           })
+            
+    return resultado
+        
 
 def convertir_a_dataframes(conexion: sqlite3.Connection) -> Dict[str, pd.DataFrame]:
     """
@@ -77,6 +109,51 @@ def convertir_a_dataframes(conexion: sqlite3.Connection) -> Dict[str, pd.DataFra
     #    - Vendedores con regiones
     # 5. Retorna el diccionario con todos los DataFrames
     pass
+    dataframes = {}
+
+    cursor = conexion.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tablas = [tabla[0] for tabla in cursor.fetchall()]
+              
+    for tabla in tablas:
+        dataframes[tabla] = pd.read_sql_query(f"SELECT * FROM {tabla};", conexion)
+
+    # Ejemplo de consulta JOIN para ventas con información de productos
+    dataframes['ventas_productos'] = pd.read_sql_query('''
+        SELECT v.*, p.nombre as producto_nombre, p.categoria, p.precio_unitario
+        FROM ventas v
+        JOIN productos p ON v.producto_id = p.id
+    ''', conexion)
+
+    dataframes['ventas_vendedores'] = pd.read_sql_query('''
+        SELECT v.*, vd.nombre as vendedor_nombre
+        FROM ventas v
+        JOIN vendedores vd ON v.vendedor_id = vd.id
+    ''', conexion)
+
+    dataframes['vendedores_regiones'] = pd.read_sql_query('''
+        SELECT vd.*, r.nombre as region_nombre, r.pais
+        FROM vendedores v
+        JOIN regiones r ON v.region_id = r.id
+    ''', conexion)
+
+    dataframes['ventas_completas'] = pd.read_sql_query('''
+        SELECT
+          v.*,
+          p.nombre as producto_nombre,
+          p.categoria,    
+          p.precio_unitario,  
+          vd.nombre as vendedor_nombre,   
+          r.nombre as region_nombre,
+          r.pais
+        FROM ventas v
+        JOIN productos p ON v.producto_id = p.id
+        JOIN vendedores vd ON v.vendedor_id = vd.id
+        JOIN regiones r ON vd.region_id = r.id
+    ''', conexion)
+
+    return dataframes                                    
+    
 
 if __name__ == "__main__":
     try:
